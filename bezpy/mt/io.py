@@ -1,6 +1,6 @@
 """Input/output functions for IRIS magnetotelluric data."""
 
-__all__ = ["read_xml", "read_1d_usgs_profile", "get_1d_site"]
+__all__ = ["read_xml", "read_xml_lower", "read_1d_usgs_profile", "get_1d_site"]
 
 import glob
 import datetime
@@ -138,6 +138,77 @@ def read_xml(fname):
     site.datalogger = DataLogger()
     try:
         site.datalogger.runlist = get_text(xml_site, "RunList").split()
+    except AttributeError:
+        # No RunList means no data
+        return site
+
+    try:
+        runinfo, nimsid, samplingrate = read_logger_info(site.xml)
+        # No info about the nimsid from the logger read, so just return
+        # without updating any information about it.
+        if nimsid is None:
+            return site
+        site.datalogger.add_run_info(runinfo, nimsid, samplingrate)
+        # Fill out the NIM System Response
+        site.datalogger.nim_system_response()
+    except ValueError:
+        pass
+
+    return site
+
+def read_xml_lower(fname):
+    """Read in an IRIS xml file and return a Site3d object
+
+    hack for lowercase
+    """
+    root = ET.parse(fname).getroot()
+
+    xml_site = root.find("site")
+    name = get_text(xml_site, "id")
+    # Creating the object
+    site = Site3d(name)
+    # Store the parsed root xml element
+    site.xml = root
+    site.product_id = get_text(root, "productid")
+
+    loc = xml_site.find("location")
+    site.latitude = convert_float(get_text(loc, "latitude"))
+    site.longitude = convert_float(get_text(loc, "longitude"))
+    site.elevation = convert_float(get_text(loc, "elevation"))
+    site.declination = convert_float(get_text(loc, "declination"))
+
+    site.start_time = convert_datetime(get_text(xml_site, "start"))
+    site.end_time = convert_datetime(get_text(xml_site, "end"))
+
+    quality = xml_site.find("dataqualitynotes")
+    site.rating = convert_int(get_text(quality, "rating"))
+    site.min_period = convert_float(get_text(quality, "goodfromperiod"))
+    site.max_period = convert_float(get_text(quality, "goodtoperiod"))
+
+    site.quality_flag = convert_int(get_text(xml_site, "dataqualitywarnings/flag"))
+
+    site.sign_convention = -1 if "-" in get_text(root, "processinginfo/signconvention") else 1
+
+    # Get all the data in a pandas dataframe
+    site.data = parse_data(root.find("data"))
+    # Sort the index so periods are increasing
+    site.data = site.data.sort_index()
+
+    site.periods = np.array(site.data.index)
+    site.Z = np.vstack([site.data['z_zxx'], site.data['z_zxy'],
+                        site.data['z_zyx'], site.data['z_zyy']])
+    try:
+        site.Z_var = np.vstack([site.data['z.var_zxx'], site.data['z.var_zxy'],
+                                site.data['z.var_zyx'], site.data['z.var_zyy']])
+    except KeyError:
+        # No variance in the data fields
+        site.Z_var = None
+
+    site.calc_resisitivity()
+
+    site.datalogger = DataLogger()
+    try:
+        site.datalogger.runlist = get_text(xml_site, "runlist").split()
     except AttributeError:
         # No RunList means no data
         return site
