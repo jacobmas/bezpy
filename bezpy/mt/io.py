@@ -124,9 +124,13 @@ def read_xml(fname):
     site.data = site.data.sort_index()
 
     site.periods = np.array(site.data.index)
-    site.Z = np.vstack([site.data['z_zxx'], site.data['z_zxy'],
-                        site.data['z_zyx'], site.data['z_zyy']])
     try:
+        site.Z = np.vstack([site.data['z_zxx'], site.data['z_zxy'],
+                        site.data['z_zyx'], site.data['z_zyy']])
+    except KeyError:
+        site.Z = None
+    try:
+
         site.Z_var = np.vstack([site.data['z.var_zxx'], site.data['z.var_zxy'],
                                 site.data['z.var_zyx'], site.data['z.var_zyy']])
     except KeyError:
@@ -195,8 +199,11 @@ def read_xml_lower(fname):
     site.data = site.data.sort_index()
 
     site.periods = np.array(site.data.index)
-    site.Z = np.vstack([site.data['z_zxx'], site.data['z_zxy'],
-                        site.data['z_zyx'], site.data['z_zyy']])
+    try:
+        site.Z = np.vstack([site.data['z_zxx'], site.data['z_zxy'],
+                            site.data['z_zyx'], site.data['z_zyy']])
+    except KeyError:
+        site.Z = None
     try:
         site.Z_var = np.vstack([site.data['z.var_zxx'], site.data['z.var_zxy'],
                                 site.data['z.var_zyx'], site.data['z.var_zyy']])
